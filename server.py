@@ -3,16 +3,28 @@
 import socket
 import socketserver
 import sys
+import os
 import threading
 import re
+from collections import *
 
 
 
 zoneFile = open("./trackers/zones", "r+")
+locationFiles = {}
+
+for root, dirs, files in os.walk("./trackers/"):
+    for file in files:
+        if "BB_" in file:
+            locationFiles[file] = open("./trackers/"+file, "r+")
+#            print(locationFiles)
 
 
 def getLocation(device):
-    pass
+    response = ""
+    for line in locationFiles[device]:
+        response += line
+    return response
 
 
 def setZone(device, zone):
@@ -30,31 +42,31 @@ def getZone(device):
 class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
     def handle(self):
         data = str(self.request.recv(1024), 'ascii')
-        print("Server recieved: '{}' from {}".format(data, self.client_address[0]))
+        print("\nServer recieved: '{}' from {}".format(data, self.client_address[0]))
         response = bytes()
 
         # if data is asking for the location of a device, send that back
-        """ to ask for the location of BB_0, data would be 'getLocation BB_0'
-            Basically a string that looks like a function """
+        # to ask for the location of BB_0, data would be 'getLocation BB_0'
+        # Basically a string that looks like a function
         if "getLocation" in data:
             device = data.split(' ')[1] # gets the portion of the string after first whitespace
             response = bytes(getLocation(device), 'ascii')
         
         # if data is sending a zone for a device, add that data to its file
-        """ to set the allowed zone of a device, data would look like 'setZone BB_0 (xx.xxN,xx.xxW),xx.xx' """
+        # to set the allowed zone of a device, data would look like 'setZone BB_0 (xx.xxN,xx.xxW),xx.xx'
         elif "setZone" in data:
             device, zone = data.split(' ')[1:2]
             setZone(device, zone)
         
         # if data is a device sending it's location, append that to its file
-        """ to send the location of a device, data would look like 'setLocation BB_0 xx.xxN,xx.xxW' """
+        # to send the location of a device, data would look like 'setLocation BB_0 xx.xxN,xx.xxW'
         elif "setLocation" in data:
             device, location = data.split(' ')[1:2]
             setLocation(device, location)
 
         # if data is a device asikng where it's allowed to be, read its file to see if it has been assigned a zone
             # if it has a zone, return that. Otherwise, return ""
-        """ to recieve the zone set for a device, data would look like 'getZone BB_0' """
+        # to recieve the zone set for a device, data would look like 'getZone BB_0'
         elif "getZone" in data:
             device = data.split(' ')[1]
             response = bytes(getZone(device), 'ascii')
@@ -76,7 +88,7 @@ def client(ip, port, message):
         sock.connect((ip, port))
         sock.sendall(bytes(message, 'ascii'))
         response = str(sock.recv(1024), 'ascii')
-        print("Client Received: {}".format(response))
+        print("\nClient Received: {}".format(response))
 
 
 if __name__ == "__main__":
@@ -95,7 +107,7 @@ if __name__ == "__main__":
         server_thread.start()
         print("Server loop running in thread:", server_thread.name)
 
-#        client(ip, port, "Hello World 1")
+        client(ip, port, "getLocation BB_0")
 #        client(ip, port, "Hello World 2")
 #        client(ip, port, "Hello World 3")
 
