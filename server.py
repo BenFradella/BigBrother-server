@@ -9,7 +9,7 @@ import re
 
 
 
-zoneFile = open("./trackers/zones", "r+")
+zoneFile = "./trackers/zones"
 zoneMutex = threading.Lock()
 
 locationFiles = {}
@@ -31,18 +31,19 @@ def getLocation(device):
 
 def setZone(device, zone):
     zoneMutex.acquire()
-    for num, line in enumerate(zoneFile, 0):
-        if device in line:
-            lines = zoneFile.readlines()
-            lines[num] = device + ' ' + zone
-            zoneFile.seek(0)
-            zoneFile.truncate()
-            zoneFile.writelines(lines)
-            zoneMutex.release()
-            return
-            
-    zoneFile.write(device + ' ' + zone + '\n')
-    zoneMutex.release()
+    with open(zoneFile, "r+") as zf:
+        for num, line in enumerate(zf, 0):
+            if device in line:
+                lines = zf.readlines()
+                lines[num] = device + ' ' + zone
+                zf.seek(0)
+                zf.truncate()
+                zf.writelines(lines)
+                zoneMutex.release()
+                return
+
+        zf.write(device + ' ' + zone + '\n')
+        zoneMutex.release()
 
 
 def setLocation(device, location):
@@ -51,10 +52,11 @@ def setLocation(device, location):
 
 def getZone(device):
     response = ""
-    for line in zoneFile:
-        if device in line:
-            response += line.split(' ')[1]
-            break
+    with open(zoneFile, "r+") as zf:
+        for line in zf:
+            if device in line:
+                response += line.split(' ')[1]
+                break
     return response
 
 
