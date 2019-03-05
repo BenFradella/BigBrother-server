@@ -16,7 +16,7 @@ locationFiles = {}
 for root, dirs, files in os.walk("./trackers/"):
     for file in files:
         if "BB_" in file:
-            locationFiles[file] = open("./trackers/"+file, "r+")
+            locationFiles[file] = "./trackers/" + file
 locationMutex = {}
 for file in locationFiles:
     locationMutex[file] = threading.Lock()
@@ -24,13 +24,18 @@ for file in locationFiles:
 
 def getLocation(device):
     response = ""
-    for line in locationFiles[device]:
-        response += line
+    
+    with open(locationFiles[device], "r+") as lf:
+        for line in lf:
+            response += line
+    
     return response
 
 
 def setZone(device, zone):
     zoneMutex.acquire()
+    newDevice = True
+
     with open(zoneFile, "r+") as zf:
         for num, line in enumerate(zf, 0):
             if device in line:
@@ -41,23 +46,32 @@ def setZone(device, zone):
                 zf.truncate()
                 zf.writelines(lines)
                 zoneMutex.release()
-                return
-
-        zf.write(device + ' ' + zone + '\n')
-        zoneMutex.release()
+                newDevice = False
+                break
+        if newDevice:         
+            zf.write(device + ' ' + zone + '\n')
+    
+    zoneMutex.release()
 
 
 def setLocation(device, location):
-    pass
+    locationMutex[device].acquire()
+    
+    with open(locationFiles[device], "r+") as lf:
+        lf.write(location)
+    
+    zoneMutex.release()
 
 
 def getZone(device):
     response = ""
+    
     with open(zoneFile, "r+") as zf:
         for line in zf:
             if device in line:
                 response += line.split(' ')[1]
                 break
+    
     return response
 
 
@@ -132,6 +146,7 @@ if __name__ == "__main__":
         server_thread.start()
         print("Server loop running in thread:", server_thread.name)
 
+        # test server functions with client objects here
         client(ip, port, "getLocation BB_0")
         client(ip, port, "getZone BB_0")
         client(ip, port, "setZone BB_2 0.0N,0.0W,0.0")
