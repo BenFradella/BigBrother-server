@@ -10,12 +10,16 @@ import re
 
 
 zoneFile = open("./trackers/zones", "r+")
-locationFiles = {}
+zoneMutex = threading.Lock()
 
+locationFiles = {}
 for root, dirs, files in os.walk("./trackers/"):
     for file in files:
         if "BB_" in file:
             locationFiles[file] = open("./trackers/"+file, "r+")
+locationMutex = {}
+for file in locationFiles:
+    locationMutex[file] = threading.Lock()
 
 
 def getLocation(device):
@@ -26,7 +30,15 @@ def getLocation(device):
 
 
 def setZone(device, zone):
-    pass
+    lastLine = b'\r'
+    
+    with zoneMutex:
+        for line in zoneFile:
+            if device in line:
+                zoneFile.write(lastLine)
+            else:
+                lastLine = line
+        zoneFile.write(device + ' ' + zone)
 
 
 def setLocation(device, location):
