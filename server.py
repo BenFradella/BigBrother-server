@@ -34,10 +34,10 @@ def setZone(device, zone):
     zoneMutex.acquire()
     for line in zoneFile:
         if device in line:
-            zoneFile.write(lastLine)
+            zoneFile.write(lastLine) # this writes to the end of the file, it needs to write to the current line
         else:
             lastLine = line
-    zoneFile.write(device + ' ' + zone)
+    zoneFile.write(device + ' ' + zone + '\n')
     zoneMutex.release()
 
 
@@ -127,7 +127,7 @@ if __name__ == "__main__":
 
         client(ip, port, "getLocation BB_0")
         client(ip, port, "getZone BB_0")
-        client(ip, port, "setZone BB_1 543.43N-382.34W,17.6")
+        client(ip, port, "setZone BB_0 543.43N,-382.34W,17.6")
 
         shutdown = input("Press Enter to shutdown server: \n")
         server.shutdown()
