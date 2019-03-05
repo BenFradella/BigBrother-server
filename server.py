@@ -30,15 +30,15 @@ def getLocation(device):
 
 
 def setZone(device, zone):
-    lastLine = b'\r'
-    
-    with zoneMutex:
-        for line in zoneFile:
-            if device in line:
-                zoneFile.write(lastLine)
-            else:
-                lastLine = line
-        zoneFile.write(device + ' ' + zone)
+    lastLine = "" #b'\r'
+    zoneMutex.acquire()
+    for line in zoneFile:
+        if device in line:
+            zoneFile.write(lastLine)
+        else:
+            lastLine = line
+    zoneFile.write(device + ' ' + zone)
+    zoneMutex.release()
 
 
 def setLocation(device, location):
@@ -68,9 +68,10 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
             response = bytes(getLocation(device), 'ascii')
         
         # if data is sending a zone for a device, add that data to its file
-        # to set the allowed zone of a device, data would look like 'setZone BB_0 (xx.xxN,xx.xxW),xx.xx'
+        # to set the allowed zone of a device, data would look like 'setZone BB_0 xx.xxN,xx.xxW,xx.xx'
         elif "setZone" in data:
-            device, zone = data.split(' ')[1:2]
+            device = data.split(' ')[1]
+            zone = data.split(' ')[2]
             setZone(device, zone)
         
         # if data is a device sending it's location, append that to its file
@@ -89,6 +90,8 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         if response:
             print("Server sent: {}".format(response))
             self.request.sendall(response)
+        else:
+            self.request.sendall(bytes(" ", 'ascii'))
 
     def finish(self):
         self.handle()
@@ -124,6 +127,7 @@ if __name__ == "__main__":
 
         client(ip, port, "getLocation BB_0")
         client(ip, port, "getZone BB_0")
+        client(ip, port, "setZone BB_1 543.43N-382.34W,17.6")
 
         shutdown = input("Press Enter to shutdown server: \n")
         server.shutdown()
