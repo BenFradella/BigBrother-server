@@ -34,9 +34,10 @@ def setZone(device, zone):
     with open(zoneFile, "r+") as zf:
         for num, line in enumerate(zf, 0):
             if device in line:
-                lines = zf.readlines()
-                lines[num] = device + ' ' + zone
                 zf.seek(0)
+                lines = zf.readlines()
+                zf.seek(0)
+                lines[num] = device + ' ' + zone + '\n'
                 zf.truncate()
                 zf.writelines(lines)
                 zoneMutex.release()
@@ -133,7 +134,7 @@ if __name__ == "__main__":
 
         client(ip, port, "getLocation BB_0")
         client(ip, port, "getZone BB_0")
-        client(ip, port, "setZone BB_0 543.43N,-382.34W,17.6")
+        client(ip, port, "setZone BB_2 0.0N,0.0W,0.0")
 
         shutdown = input("Press Enter to shutdown server: \n")
         server.shutdown()
