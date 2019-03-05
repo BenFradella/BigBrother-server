@@ -30,14 +30,17 @@ def getLocation(device):
 
 
 def setZone(device, zone):
-    lastLine = "" #b'\r'
     zoneMutex.acquire()
     for num, line in enumerate(zoneFile, 0):
         if device in line:
-            zoneFile.seek(num)
-            zoneFile.write(lastLine) # this writes to the end of the file, it needs to write to the current line
-        else:
-            lastLine = line
+            lines = zoneFile.readlines()
+            lines[num] = device + ' ' + zone
+            zoneFile.seek(0)
+            zoneFile.truncate()
+            zoneFile.writelines(lines)
+            zoneMutex.release()
+            return
+            
     zoneFile.write(device + ' ' + zone + '\n')
     zoneMutex.release()
 
