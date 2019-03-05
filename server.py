@@ -6,10 +6,9 @@ import sys
 import os
 import threading
 import re
-from collections import *
 
 
-
+# note -- the files are full of garbage data right now, just for testing purposes
 zoneFile = open("./trackers/zones", "r+")
 locationFiles = {}
 
@@ -38,7 +37,8 @@ def getZone(device):
     response = ""
     for line in zoneFile:
         if device in line:
-            response += line.split(' ')[-1]
+            response += line.split(' ')[1]
+            break
     return response
 
 
@@ -79,7 +79,7 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
             self.request.sendall(response)
 
     def finish(self):
-        self.handle()
+        self.handle() # setup to handle another request instead of closing the connection
 
 
 class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
@@ -112,7 +112,6 @@ if __name__ == "__main__":
 
         client(ip, port, "getLocation BB_0")
         client(ip, port, "getZone BB_0")
-#        client(ip, port, "Hello World 3")
 
         shutdown = input("Press Enter to shutdown server: \n")
         server.shutdown()
