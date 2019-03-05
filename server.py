@@ -17,7 +17,6 @@ for root, dirs, files in os.walk("./trackers/"):
     for file in files:
         if "BB_" in file:
             locationFiles[file] = open("./trackers/"+file, "r+")
-#            print(locationFiles)
 
 
 def getLocation(device):
@@ -36,7 +35,11 @@ def setLocation(device, location):
 
 
 def getZone(device):
-    pass
+    response = ""
+    for line in zoneFile:
+        if device in line:
+            response += line.split(' ')[-1]
+    return response
 
 
 class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
@@ -108,7 +111,7 @@ if __name__ == "__main__":
         print("Server loop running in thread:", server_thread.name)
 
         client(ip, port, "getLocation BB_0")
-#        client(ip, port, "Hello World 2")
+        client(ip, port, "getZone BB_0")
 #        client(ip, port, "Hello World 3")
 
         shutdown = input("Press Enter to shutdown server: \n")
