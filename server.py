@@ -8,15 +8,15 @@ import threading
 import re
 
 
-
-zoneFile = "./trackers/zones"
+fileDir = "./trackers/"
+zoneFile = fileDir + "zones"
 zoneMutex = threading.Lock()
 
 locationFiles = {}
-for root, dirs, files in os.walk("./trackers/"):
+for root, dirs, files in os.walk(fileDir):
     for file in files:
         if "BB_" in file:
-            locationFiles[file] = "./trackers/" + file
+            locationFiles[file] = fileDir + file
 locationMutex = {}
 for file in locationFiles:
     locationMutex[file] = threading.Lock()
@@ -50,17 +50,20 @@ def setZone(device, zone):
                 break
         if newDevice:         
             zf.write(device + ' ' + zone + '\n')
-    
-    zoneMutex.release()
+            zoneMutex.release()
 
 
 def setLocation(device, location):
-    locationMutex[device].acquire()
+    try:
+        locationMutex[device].acquire()
+    except:
+        locationMutex[device] = threading.Lock()
+        locationMutex[device].acquire()
     
-    with open(locationFiles[device], "r+") as lf:
+    with open(fileDir + device, "a+") as lf:
         lf.write(location)
     
-    zoneMutex.release()
+    locationMutex[device].release()
 
 
 def getZone(device):
@@ -98,7 +101,8 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         # if data is a device sending it's location, append that to its file
         # to send the location of a device, data would look like 'setLocation BB_0 xx.xxN,xx.xxW'
         elif "setLocation" in data:
-            device, location = data.split(' ')[1:2]
+            device = data.split(' ')[1]
+            location = data.split(' ')[2]
             setLocation(device, location)
 
         # if data is a device asikng where it's allowed to be, read its file to see if it has been assigned a zone
@@ -149,7 +153,7 @@ if __name__ == "__main__":
         # test server functions with client objects here
         client(ip, port, "getLocation BB_0")
         client(ip, port, "getZone BB_0")
-        client(ip, port, "setZone BB_2 0.0N,0.0W,0.0")
+        client(ip, port, "setLocation BB_2 0.0N,0.0W,0.0")
 
         shutdown = input("Press Enter to shutdown server: \n")
         server.shutdown()
