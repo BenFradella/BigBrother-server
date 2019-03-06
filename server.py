@@ -25,10 +25,13 @@ for file in locationFiles:
 def getLocation(device):
     response = ""
     
-    with open(locationFiles[device], "r+") as lf:
-        for line in lf:
-            response += line
-    
+    try:
+        with open(locationFiles[device], "r+") as lf:
+            for line in lf:
+                response += line
+    except:
+        response += "Device Not Found"
+        
     return response
 
 
@@ -57,10 +60,11 @@ def setLocation(device, location):
     try:
         locationMutex[device].acquire()
     except:
+        locationFiles[device] = fileDir + device
         locationMutex[device] = threading.Lock()
         locationMutex[device].acquire()
     
-    with open(fileDir + device, "a+") as lf:
+    with open(locationFiles[device], "a+") as lf:
         lf.write(location)
     
     locationMutex[device].release()
@@ -74,7 +78,7 @@ def getZone(device):
             if device in line:
                 response += line.split(' ')[1]
                 break
-    
+
     return response
 
 
