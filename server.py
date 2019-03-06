@@ -119,11 +119,10 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         if response:
             print("Server sent: {}".format(response))
             self.request.sendall(response)
-        else:
-            self.request.sendall(bytes(" ", 'ascii'))
 
     def finish(self):
-        self.handle() # setup to handle another request instead of closing the connection
+        # setup to handle another request instead of closing the connection
+        self.handle()
 
 
 class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
@@ -134,12 +133,17 @@ def client(ip, port, message):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect((ip, port))
         sock.sendall(bytes(message, 'ascii'))
-        response = str(sock.recv(1024), 'ascii')
-        print("\nClient Received: {}".format(response))
+        if "get" in message:
+            response = str(sock.recv(1024), 'ascii')
+            print("\nClient Received: {}".format(response))
 
 
 if __name__ == "__main__":
     if "win" in platform:
+        # assign the server ip to your machine's local ip address.
+        # I don't know whether any windows machines will be able to accept
+        # connections from outside their local network or not but the local
+        # client objects will still work for testing commands
         IP = socket.gethostbyname(socket.gethostname())
     else:
         IP = ''
