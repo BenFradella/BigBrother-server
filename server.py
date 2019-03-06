@@ -3,6 +3,7 @@
 import socket
 import socketserver
 import sys
+from sys import platform
 import os
 import threading
 import re
@@ -138,8 +139,13 @@ def client(ip, port, message):
 
 
 if __name__ == "__main__":
+    if "win" in platform:
+        IP = socket.gethostbyname(socket.gethostname())
+    else:
+        IP = ''
+    
     # Port 0 means to select an arbitrary unused port
-    HOST, PORT = socket.gethostbyname(socket.gethostname()), 6969
+    HOST, PORT = IP, 6969
 
     server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
     with server:
