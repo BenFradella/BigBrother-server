@@ -66,7 +66,7 @@ def setLocation(device, location):
         locationMutex[device].acquire()
     
     with open(locationFiles[device], "a+") as lf:
-        lf.write(location)
+        lf.write(location + '\n')
     
     locationMutex[device].release()
 
