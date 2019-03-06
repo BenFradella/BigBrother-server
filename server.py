@@ -99,15 +99,13 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         # if data is sending a zone for a device, add that data to its file
         # to set the allowed zone of a device, data would look like 'setZone BB_0 xx.xxN,xx.xxW,xx.xx'
         elif "setZone" in data:
-            device = data.split(' ')[1]
-            zone = data.split(' ')[2]
+            device, zone = data.split(' ')[1:3]
             setZone(device, zone)
         
         # if data is a device sending it's location, append that to its file
         # to send the location of a device, data would look like 'setLocation BB_0 xx.xxN,xx.xxW'
         elif "setLocation" in data:
-            device = data.split(' ')[1]
-            location = data.split(' ')[2]
+            device, location = data.split(' ')[1:3]
             setLocation(device, location)
 
         # if data is a device asikng where it's allowed to be, read its file to see if it has been assigned a zone
@@ -141,7 +139,7 @@ def client(ip, port, message):
 
 if __name__ == "__main__":
     # Port 0 means to select an arbitrary unused port
-    HOST, PORT = '', 6969
+    HOST, PORT = socket.gethostbyname(socket.gethostname()), 6969
 
     server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
     with server:
