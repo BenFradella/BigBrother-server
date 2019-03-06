@@ -9,36 +9,77 @@ import re
 
 
 # note -- the files are full of garbage data right now, just for testing purposes
-zoneFile = open("./trackers/zones", "r+")
-locationFiles = {}
+fileDir = "./trackers/"
+zoneFile = fileDir + "zones"
+zoneMutex = threading.Lock()
 
-for root, dirs, files in os.walk("./trackers/"):
+locationFiles = {}
+for root, dirs, files in os.walk(fileDir):
     for file in files:
         if "BB_" in file:
-            locationFiles[file] = open("./trackers/"+file, "r+")
+            locationFiles[file] = fileDir + file
+locationMutex = {}
+for file in locationFiles:
+    locationMutex[file] = threading.Lock()
 
 
 def getLocation(device):
     response = ""
-    for line in locationFiles[device]:
-        response += line
+    
+    try:
+        with open(locationFiles[device], "r+") as lf:
+            for line in lf:
+                response += line
+    except:
+        response += "Device Not Found"
+        
     return response
 
 
 def setZone(device, zone):
-    pass
+    zoneMutex.acquire()
+    newDevice = True
+
+    with open(zoneFile, "r+") as zf:
+        for num, line in enumerate(zf, 0):
+            if device in line:
+                zf.seek(0)
+                lines = zf.readlines()
+                zf.seek(0)
+                lines[num] = device + ' ' + zone + '\n'
+                zf.truncate()
+                zf.writelines(lines)
+                zoneMutex.release()
+                newDevice = False
+                break
+        if newDevice:         
+            zf.write(device + ' ' + zone + '\n')
+            zoneMutex.release()
 
 
 def setLocation(device, location):
-    pass
+    try:
+        locationMutex[device].acquire()
+    except:
+        locationFiles[device] = fileDir + device
+        locationMutex[device] = threading.Lock()
+        locationMutex[device].acquire()
+    
+    with open(locationFiles[device], "a+") as lf:
+        lf.write(location)
+    
+    locationMutex[device].release()
 
 
 def getZone(device):
     response = ""
-    for line in zoneFile:
-        if device in line:
-            response += line.split(' ')[1]
-            break
+    
+    with open(zoneFile, "r+") as zf:
+        for line in zf:
+            if device in line:
+                response += line.split(' ')[1]
+                break
+
     return response
 
 
@@ -56,15 +97,17 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
             response = bytes(getLocation(device), 'ascii')
         
         # if data is sending a zone for a device, add that data to its file
-        # to set the allowed zone of a device, data would look like 'setZone BB_0 (xx.xxN,xx.xxW),xx.xx'
+        # to set the allowed zone of a device, data would look like 'setZone BB_0 xx.xxN,xx.xxW,xx.xx'
         elif "setZone" in data:
-            device, zone = data.split(' ')[1:2]
+            device = data.split(' ')[1]
+            zone = data.split(' ')[2]
             setZone(device, zone)
         
         # if data is a device sending it's location, append that to its file
         # to send the location of a device, data would look like 'setLocation BB_0 xx.xxN,xx.xxW'
         elif "setLocation" in data:
-            device, location = data.split(' ')[1:2]
+            device = data.split(' ')[1]
+            location = data.split(' ')[2]
             setLocation(device, location)
 
         # if data is a device asikng where it's allowed to be, read its file to see if it has been assigned a zone
@@ -77,6 +120,8 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         if response:
             print("Server sent: {}".format(response))
             self.request.sendall(response)
+        else:
+            self.request.sendall(bytes(" ", 'ascii'))
 
     def finish(self):
         self.handle() # setup to handle another request instead of closing the connection
@@ -110,8 +155,10 @@ if __name__ == "__main__":
         server_thread.start()
         print("Server loop running in thread:", server_thread.name)
 
+        # test server functions with client objects here
         client(ip, port, "getLocation BB_0")
         client(ip, port, "getZone BB_0")
+        client(ip, port, "setLocation BB_2 0.0N,0.0W,0.0")
 
         shutdown = input("Press Enter to shutdown server: \n")
         server.shutdown()
