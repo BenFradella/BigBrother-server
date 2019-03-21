@@ -32,7 +32,7 @@ def getLocation(device):
             for line in lf:
                 response += line
     except:
-        response += "Device Not Found"
+        response += "0.0N,0.0W"
         
     return response
 
@@ -80,6 +80,8 @@ def getZone(device):
             if device in line:
                 response += line.split(' ')[1]
                 break
+    if response == "":
+        response += "0.0N,0.0W,0.0"
 
     return response
 
@@ -117,6 +119,8 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
             response = bytes(getZone(device), 'ascii')
 
         if response:
+            numBytes = len(response).to_bytes(2, 'big')
+            response = numBytes + response
             print("Server sent: {}".format(response))
             self.request.sendall(response)
 
@@ -165,7 +169,7 @@ if __name__ == "__main__":
 
         # test server functions with client objects here
         client(ip, port, "getLocation BB_0")
-        client(ip, port, "getZone BB_0")
+        client(ip, port, "getZone BB_3")
         client(ip, port, "setLocation BB_2 0.0N,0.0W,0.0")
 
         shutdown = input("Press Enter to shutdown server: \n")
