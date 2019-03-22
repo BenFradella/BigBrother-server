@@ -25,7 +25,7 @@ Server is set up to send and recieve data as bytes right now.
 *  the rest of the string is "setZone (device name) (Latitude,Longitude,radius)"
 *  **Example: b"\x00\x23setZone BB_0 12.4302N,84.2423E,12.5"**
 
-# Receiving location data from BigBrother to the server:
+# Receiving location data from the server:
 *  generate the following string: "getLocation (device name)"
 *  format it to bytes as before and send it
 *  **Example: b"\x00\x10getLocation BB_0"**
