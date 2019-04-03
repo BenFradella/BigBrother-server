@@ -134,9 +134,7 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         self.request.close()
     
     def readUTF(self):
-        length_bytes = ""
-        while len(length_bytes) < 2: # sometimes we receive garbage 0-byte messages
-            length_bytes = self.request.recv(2)
+        length_bytes = self.request.recv(2)
         utf_length = struct.unpack('>H', length_bytes)[0]   # number of bytes to read
         return str(self.request.recv(utf_length), "utf-8")
     
@@ -191,7 +189,7 @@ if __name__ == "__main__":
         print("Server loop running in thread:", server_thread.name)
 
         # test server functions with client objects here
-        client(ip, port, "getLocation BB_0")
+        # client(ip, port, "getLocation BB_0")
         # client(ip, port, "getZone BB_3")
         # client(ip, port, "setLocation BB_2 0.0N,0.0W,0.0")
 
