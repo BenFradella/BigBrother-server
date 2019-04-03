@@ -93,8 +93,7 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         data = u""
         while data != "Goodbye":
             sleep(0.02) # max 50 hertz tickrate to save cpu resources
-            utf_length = struct.unpack('>H', self.request.recv(2))[0]
-            data = str(self.request.recv(utf_length), "utf-8")
+            data = self.readUTF()
             print("\nServer recieved: '{}' from {}".format(data, self.client_address[0]))
             response = u""
     
@@ -125,16 +124,26 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 response = getZone(device).encode("utf-8")
     
             if response != u"":
-                numBytes = struct.pack(">H", len(response))
-                self.request.send(numBytes)
-                self.request.send(response)
-                print("Server sent: {} {}".format(numBytes, response))
+                self.writeUTF(response)
+                print("Server sent: {}".format(response))
     
     def finish(self):
         # setup to handle another request instead of closing the connection
         # self.handle()
         print("connection with {} closed".format(self.client_address[0]))
         self.request.close()
+    
+    def readUTF(self):
+        length_bytes = ""
+        while len(length_bytes) < 2: # sometimes we receive garbage 0-byte messages
+            length_bytes = self.request.recv(2)
+        utf_length = struct.unpack('>H', length_bytes)[0]   # number of bytes to read
+        return str(self.request.recv(utf_length), "utf-8")
+    
+    def writeUTF(self, message):
+        utf_length = struct.pack(">H", len(message))
+        self.request.send(utf_length) # send length of string
+        self.request.send(message)  # send string
 
 
 class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
