@@ -11,7 +11,8 @@ import struct
 from time import sleep
 
 
-# note -- the files are full of garbage data right now, just for testing purposes
+# note -- the files are full of garbage data right now
+# just for testing purposes
 fileDir = "./trackers/"
 zoneFile = fileDir + "zones"
 zoneMutex = threading.Lock()
@@ -105,20 +106,23 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 response = getLocation(device).encode("utf-8")
             
             # if data is sending a zone for a device, add that data to its file
-            # to set the allowed zone of a device, data would look like 'setZone BB_0 xx.xxN,xx.xxW,xx.xx'
+            # to set the allowed zone of a device, data would look like:
+            # 'setZone BB_0 xx.xxN,xx.xxW,xx.xx'
             elif "setZone" in data:
                 device, zone = data.split(' ')[1:3]
                 setZone(device, zone)
             
             # if data is a device sending it's location, append that to its file
-            # to send the location of a device, data would look like 'setLocation BB_0 xx.xxN,xx.xxW'
+            # to send the location of a device, data would look like:
+            # 'setLocation BB_0 xx.xxN,xx.xxW'
             elif "setLocation" in data:
                 device, location = data.split(' ')[1:3]
                 setLocation(device, location)
     
-            # if data is a device asikng where it's allowed to be, read its file to see if it has been assigned a zone
-                # if it has a zone, return that. Otherwise, return ""
-            # to recieve the zone set for a device, data would look like 'getZone BB_0'
+            # if data is a device asking where it's allowed to be,
+            # read its file to see if it has been assigned a zone
+            # to recieve the zone set for a device, data would look like:
+            # 'getZone BB_0'
             elif "getZone" in data:
                 device = data.split(' ')[1]
                 response = getZone(device).encode("utf-8")
@@ -128,14 +132,12 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 print("Server sent: {}".format(response))
     
     def finish(self):
-        # setup to handle another request instead of closing the connection
-        # self.handle()
         print("connection with {} closed".format(self.client_address[0]))
         self.request.close()
     
     def readUTF(self):
-        length_bytes = self.request.recv(2)
-        utf_length = struct.unpack('>H', length_bytes)[0]   # number of bytes to read
+        # get number of bytes to receive
+        utf_length = struct.unpack('>H', self.request.recv(2))[0]
         return str(self.request.recv(utf_length), "utf-8")
     
     def writeUTF(self, message):
