@@ -29,14 +29,14 @@ for file in locationFiles:
 
 def getLocation(device):
     response = ""
-    
+
     try:
         with open(locationFiles[device], "r+") as lf:
             for line in lf:
                 response += line
-    except:
+    except KeyError:
         response += "0.0N,0.0W"
-        
+
     return response
 
 
@@ -56,7 +56,7 @@ def setZone(device, zone):
                 zoneMutex.release()
                 newDevice = False
                 break
-        if newDevice:         
+        if newDevice:
             zf.write(device + ' ' + zone + '\n')
             zoneMutex.release()
 
@@ -64,20 +64,20 @@ def setZone(device, zone):
 def setLocation(device, location):
     try:
         locationMutex[device].acquire()
-    except:
+    except KeyError:
         locationFiles[device] = fileDir + device
         locationMutex[device] = threading.Lock()
         locationMutex[device].acquire()
-    
+
     with open(locationFiles[device], "a+") as lf:
         lf.write(location + '\n')
-    
+
     locationMutex[device].release()
 
 
 def getZone(device):
     response = ""
-    
+
     with open(zoneFile, "r+") as zf:
         for line in zf:
             if device in line:
@@ -93,10 +93,10 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
     def handle(self):
         data = u""
         clientIP = self.client_address[0]
-        
+
         while data != "Goodbye":
             sleep(0.02)  # max 50 hertz tickrate to save cpu resources
-            
+
             if clientIP not in clientTypes:
                 data = u"{}".format(self.request.recv(32))
                 if "observer" in data:
@@ -107,57 +107,57 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 data = self.readUTF()
             else:
                 data = u"{}".format(self.request.recv(32))
-            print("\nServer recieved: '{}' from {}".format(data, self.client_address[0]))
+            print("\nServer recieved: '{}' from {}".format(data, clientIP))
             response = u""
-    
+
             # if data is asking for the location of a device, send that back
             # to ask for the location of BB_0, data would be 'getLocation BB_0'
             # Basically a string that looks like a function
             if "getLocation" in data:
-                device = data.split(' ')[1] # gets the portion of the string after first whitespace
-                response = getLocation(device).encode("utf-8")
-            
+                device = data.split(' ')[1]
+                response = u"{}".format(getLocation(device))
+
             # if data is sending a zone for a device, add that data to its file
             # to set the allowed zone of a device, data would look like:
             # 'setZone BB_0 xx.xxN,xx.xxW,xx.xx'
             elif "setZone" in data:
                 device, zone = data.split(' ')[1:3]
                 setZone(device, zone)
-            
-            # if data is a device sending it's location, append that to its file
+
+            # if data is a device sending its location, append that to its file
             # to send the location of a device, data would look like:
             # 'setLocation BB_0 xx.xxN,xx.xxW'
             elif "setLocation" in data:
                 device, location = data.split(' ')[1:3]
                 setLocation(device, location)
-    
+
             # if data is a device asking where it's allowed to be,
             # read its file to see if it has been assigned a zone
             # to recieve the zone set for a device, data would look like:
             # 'getZone BB_0'
             elif "getZone" in data:
                 device = data.split(' ')[1]
-                response = getZone(device).encode("utf-8")
-    
+                response = u"{}".format(getZone(device))
+
             if response != u"":
                 if clientTypes[clientIP] == "BigBrother":
                     self.request.sendall(response)
                 else:
                     self.writeUTF(response)
                 print("Server sent: {}".format(response))
-    
+
     def finish(self):
         print("connection with {} closed".format(self.client_address[0]))
         self.request.close()
-    
+
     def readUTF(self):
         # get number of bytes to receive
         utf_length = struct.unpack('>H', self.request.recv(2))[0]
         return str(self.request.recv(utf_length), "utf-8")
-    
+
     def writeUTF(self, message):
         utf_length = struct.pack(">H", len(message))
-        self.request.send(utf_length) # send length of string
+        self.request.send(utf_length)  # send length of string
         self.request.send(message)  # send string
 
 
@@ -170,7 +170,7 @@ def client(ip, port, message):
         def writeUTF(msg):
             sock.send(struct.pack(">H", len(msg)))
             sock.send(msg.encode("utf-8"))
-        
+
         sock.connect((ip, port))
         writeUTF("hello from an observer")
         sleep(1)
@@ -191,7 +191,7 @@ if __name__ == "__main__":
         IP = socket.gethostbyname(socket.gethostname())
     else:
         IP = ''
-    
+
     # Port 0 means to select an arbitrary unused port
     HOST, PORT = IP, 6969
 
