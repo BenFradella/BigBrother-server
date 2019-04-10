@@ -2,15 +2,15 @@
 
 import socket
 import socketserver
-import sys
 from sys import platform
 import os
 import threading
-import re
 import struct
 from time import sleep
+from collections import defaultdict
 
 
+clientTypes = defaultdict(str)
 # note -- the files are full of garbage data right now
 # just for testing purposes
 fileDir = "./trackers/"
@@ -92,9 +92,21 @@ def getZone(device):
 class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
     def handle(self):
         data = u""
+        clientIP = self.client_address[0]
+        
         while data != "Goodbye":
-            sleep(0.02) # max 50 hertz tickrate to save cpu resources
-            data = self.readUTF()
+            sleep(0.02)  # max 50 hertz tickrate to save cpu resources
+            
+            if clientIP not in clientTypes:
+                data = u"{}".format(self.request.recv(32))
+                if "observer" in data:
+                    clientTypes[clientIP] = "Android"
+                else:
+                    clientTypes[clientIP] = "BigBrother"
+            elif clientTypes[clientIP] == "Android":
+                data = self.readUTF()
+            else:
+                data = u"{}".format(self.request.recv(32))
             print("\nServer recieved: '{}' from {}".format(data, self.client_address[0]))
             response = u""
     
@@ -128,7 +140,10 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 response = getZone(device).encode("utf-8")
     
             if response != u"":
-                self.writeUTF(response)
+                if clientTypes[clientIP] == "BigBrother":
+                    self.request.sendall(response)
+                else:
+                    self.writeUTF(response)
                 print("Server sent: {}".format(response))
     
     def finish(self):
@@ -157,6 +172,8 @@ def client(ip, port, message):
             sock.send(msg.encode("utf-8"))
         
         sock.connect((ip, port))
+        writeUTF("hello from an observer")
+        sleep(1)
         writeUTF(message)
         if "get" in message:
             utf_length = struct.unpack('>H', sock.recv(2))[0]
@@ -193,7 +210,7 @@ if __name__ == "__main__":
         # test server functions with client objects here
         # client(ip, port, "getLocation BB_0")
         # client(ip, port, "getZone BB_3")
-        # client(ip, port, "setLocation BB_2 0.0N,0.0W,0.0")
+        client(ip, port, "setLocation BB_2 0.0N,0.0W,0.0")
 
         shutdown = input("Press Enter to shutdown server: \n")
         server.shutdown()
