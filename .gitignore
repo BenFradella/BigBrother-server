@@ -1,2 +1,3 @@
-.vscode/**
-trackers/**
+**.vscode/**
+**trackers/**
+**knownClients.json
