@@ -2,15 +2,19 @@
 
 import socket
 import socketserver
-from sys import platform
-import os
+
 import threading
-import struct
 from time import sleep
-from collections import defaultdict
+
+import os
+import json
+import struct
+
+from sys import platform
 
 
-clientTypes = defaultdict(str)
+with open('knownClients.json') as clientFile:
+    knownClients = json.load(clientFile)
 # note -- the files are full of garbage data right now
 # just for testing purposes
 fileDir = "./trackers/"
@@ -91,60 +95,37 @@ def getZone(device):
 
 class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
     def handle(self):
-        data = u""
-        clientIP = self.client_address[0]
+        data = ""
+        clientIp = self.client_address[0]
 
         while data != "Goodbye":
-            sleep(0.02)  # max 50 hertz tickrate to save cpu resources
-
-            if clientIP not in clientTypes:
-                data = u"{}".format(self.request.recv(32))
+            data = self.readUTF()
+            if clientIp not in knownClients:
                 if "observer" in data:
-                    clientTypes[clientIP] = "Android"
+                    knownClients[clientIp] = "android"
                 else:
-                    clientTypes[clientIP] = "BigBrother"
-            elif clientTypes[clientIP] == "Android":
-                data = self.readUTF()
-            else:
-                data = u"{}".format(self.request.recv(32))
-            print("\nServer recieved: '{}' from {}".format(data, clientIP))
-            response = u""
+                    knownClients[clientIp] = "bigBrother"
+            print("\nServer recieved: '{}' from {}".format(data, clientIp))
+            response = ""
 
-            # if data is asking for the location of a device, send that back
-            # to ask for the location of BB_0, data would be 'getLocation BB_0'
-            # Basically a string that looks like a function
             if "getLocation" in data:
                 device = data.split(' ')[1]
-                response = u"{}".format(getLocation(device))
-
-            # if data is sending a zone for a device, add that data to its file
-            # to set the allowed zone of a device, data would look like:
-            # 'setZone BB_0 xx.xxN,xx.xxW,xx.xx'
+                response = getLocation(device)
             elif "setZone" in data:
                 device, zone = data.split(' ')[1:3]
                 setZone(device, zone)
-
-            # if data is a device sending its location, append that to its file
-            # to send the location of a device, data would look like:
-            # 'setLocation BB_0 xx.xxN,xx.xxW'
             elif "setLocation" in data:
                 device, location = data.split(' ')[1:3]
                 setLocation(device, location)
-
-            # if data is a device asking where it's allowed to be,
-            # read its file to see if it has been assigned a zone
-            # to recieve the zone set for a device, data would look like:
-            # 'getZone BB_0'
             elif "getZone" in data:
                 device = data.split(' ')[1]
-                response = u"{}".format(getZone(device))
-
-            if response != u"":
-                if clientTypes[clientIP] == "BigBrother":
-                    self.request.sendall(response)
-                else:
-                    self.writeUTF(response)
+                response = getZone(device)
+            
+            if response != "":
                 print("Server sent: {}".format(response))
+                self.writeUTF(response)
+            
+            sleep(0.02)  # max 50 hertz tickrate to save cpu resources
 
     def finish(self):
         print("connection with {} closed".format(self.client_address[0]))
@@ -158,7 +139,7 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
     def writeUTF(self, message):
         utf_length = struct.pack(">H", len(message))
         self.request.send(utf_length)  # send length of string
-        self.request.send(message)  # send string
+        self.request.send(message.encode("utf-8"))  # send string
 
 
 class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
@@ -172,8 +153,7 @@ def client(ip, port, message):
             sock.send(msg.encode("utf-8"))
 
         sock.connect((ip, port))
-        writeUTF("hello from an observer")
-        sleep(1)
+        writeUTF("Hello from an observer")
         writeUTF(message)
         if "get" in message:
             utf_length = struct.unpack('>H', sock.recv(2))[0]
@@ -210,7 +190,10 @@ if __name__ == "__main__":
         # test server functions with client objects here
         # client(ip, port, "getLocation BB_0")
         # client(ip, port, "getZone BB_3")
-        client(ip, port, "setLocation BB_2 0.0N,0.0W,0.0")
+        # client(ip, port, "setLocation BB_2 0.0N,0.0W,0.0")
 
         shutdown = input("Press Enter to shutdown server: \n")
         server.shutdown()
+
+    with open('knownClients.json', 'w') as clientFile:
+        json.dump(knownClients, clientFile, indent=4)
