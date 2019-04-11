@@ -13,8 +13,16 @@ import struct
 from sys import platform
 
 
-with open('knownClients.json') as clientFile:
-    knownClients = json.load(clientFile)
+try:
+    with open('knownClients.json') as clientFile:
+        knownClients = json.load(clientFile)
+except FileNotFoundError:
+    with open('knownClients.json', 'w+') as clientFile:
+        init = {}
+        init['127.0.0.1'] = {'type': 'android'}
+        json.dump(init, clientFile, indent=4)
+    with open('knownClients.json') as clientFile:
+        knownClients = json.load(clientFile)
 # note -- the files are full of garbage data right now
 # just for testing purposes
 fileDir = "./trackers/"
@@ -101,10 +109,11 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         while data != "Goodbye":
             data = self.readUTF()
             if clientIp not in knownClients:
+                knownClients[clientIp] = {}
                 if "observer" in data:
-                    knownClients[clientIp] = "android"
+                    knownClients[clientIp]['type'] = "android"
                 else:
-                    knownClients[clientIp] = "bigBrother"
+                    knownClients[clientIp]['type'] = "bigBrother"
             print("\nServer recieved: '{}' from {}".format(data, clientIp))
             response = ""
 
@@ -188,7 +197,7 @@ if __name__ == "__main__":
         print("Server loop running in thread:", server_thread.name)
 
         # test server functions with client objects here
-        # client(ip, port, "getLocation BB_0")
+        client(ip, port, "getLocation BB_0")
         # client(ip, port, "getZone BB_3")
         # client(ip, port, "setLocation BB_2 0.0N,0.0W,0.0")
 
