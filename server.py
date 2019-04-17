@@ -202,5 +202,5 @@ if __name__ == "__main__":
         shutdown = input("Press Enter to shutdown server: \n")
         server.shutdown()
 
-    with open('knownClients.json', 'w') as clientFile:
+    with open(fileDir + 'knownClients.json', 'w') as clientFile:
         json.dump(knownClients, clientFile, indent=4)
