@@ -13,37 +13,34 @@ import struct
 from sys import platform
 
 
+fileDir = "./data/"
 try:
-    with open('knownClients.json') as clientFile:
+    with open(fileDir + 'knownClients.json') as clientFile:
         knownClients = json.load(clientFile)
 except FileNotFoundError:
-    with open('knownClients.json', 'w+') as clientFile:
+    with open(fileDir + 'knownClients.json', 'w+') as clientFile:
         init = {}
         init['127.0.0.1'] = {'type': 'android'}
         json.dump(init, clientFile, indent=4)
-    with open('knownClients.json') as clientFile:
+    with open(fileDir + 'knownClients.json') as clientFile:
         knownClients = json.load(clientFile)
 # note -- the files are full of garbage data right now
 # just for testing purposes
-fileDir = "./trackers/"
-zoneFile = fileDir + "zones"
-zoneMutex = threading.Lock()
-
-locationFiles = {}
-for root, dirs, files in os.walk(fileDir):
+deviceFiles = {}
+for _, _, files in os.walk(fileDir):
     for file in files:
         if "BB_" in file:
-            locationFiles[file] = fileDir + file
-locationMutex = {}
-for file in locationFiles:
-    locationMutex[file] = threading.Lock()
+            deviceFiles[file] = fileDir + file
+deviceMutex = {}
+for file in deviceFiles:
+    deviceMutex[file] = threading.Lock()
 
 
 def getLocation(device):
     response = ""
 
     try:
-        with open(locationFiles[device], "r+") as lf:
+        with open(deviceFiles[device], "r+") as lf:
             for line in lf:
                 response += line
     except KeyError:
@@ -53,45 +50,46 @@ def getLocation(device):
 
 
 def setZone(device, zone):
-    zoneMutex.acquire()
-    newDevice = True
+    if device not in deviceFiles:
+        fileName = fileDir + device + '.json'
+        with open(fileName, 'w+') as df:
+            init = {}
+            init['location'] = []
+            init['zone'] = []
+            json.dump(init, df, indent=4)
+        deviceFiles[device] = fileName
+        deviceMutex[device] = threading.Lock()
+    
+    deviceMutex[device].acquire()
 
-    with open(zoneFile, "r+") as zf:
-        for num, line in enumerate(zf, 0):
-            if device in line:
-                zf.seek(0)
-                lines = zf.readlines()
-                zf.seek(0)
-                lines[num] = device + ' ' + zone + '\n'
-                zf.truncate()
-                zf.writelines(lines)
-                zoneMutex.release()
-                newDevice = False
-                break
-        if newDevice:
-            zf.write(device + ' ' + zone + '\n')
-            zoneMutex.release()
+    with open(deviceFiles[device], "r+") as df:
+        data = json.load(df)
+        data['zone'].append(zone)
+        df.seek(0)
+        json.dump(data, df, indent=4)
+    
+    deviceMutex[device].release()
 
 
 def setLocation(device, location):
     try:
-        locationMutex[device].acquire()
+        deviceMutex[device].acquire()
     except KeyError:
-        locationFiles[device] = fileDir + device
-        locationMutex[device] = threading.Lock()
-        locationMutex[device].acquire()
+        deviceFiles[device] = fileDir + device
+        deviceMutex[device] = threading.Lock()
+        deviceMutex[device].acquire()
 
-    with open(locationFiles[device], "a+") as lf:
+    with open(deviceFiles[device], "a+") as lf:
         lf.write(location + '\n')
 
-    locationMutex[device].release()
+    deviceMutex[device].release()
 
 
 def getZone(device):
     response = ""
 
-    with open(zoneFile, "r+") as zf:
-        for line in zf:
+    with open(deviceFiles[device], "r+") as df:
+        for line in df:
             if device in line:
                 response += line.split(' ')[1]
                 break
@@ -197,9 +195,9 @@ if __name__ == "__main__":
         print("Server loop running in thread:", server_thread.name)
 
         # test server functions with client objects here
-        client(ip, port, "getLocation BB_0")
+        # client(ip, port, "getLocation BB_0")
         # client(ip, port, "getZone BB_3")
-        # client(ip, port, "setLocation BB_2 0.0N,0.0W,0.0")
+        client(ip, port, "setZone BB_2 0.0N,0.0W,0.0")
 
         shutdown = input("Press Enter to shutdown server: \n")
         server.shutdown()
