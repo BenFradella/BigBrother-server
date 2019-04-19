@@ -194,6 +194,8 @@ if __name__ == "__main__":
     HOST, PORT = IP, 6969
 
     server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
+    server.socket.setblocking(0)
+    server.socket.settimeout(2)
     with server:
         ip, port = server.server_address
 
@@ -207,7 +209,7 @@ if __name__ == "__main__":
 
         """test server functions with client objects here"""
         # client(ip, port, "setLocation BB_2 0.324N,40.432E")
-        # client(ip, port, "getLocation BB_2")
+        client(ip, port, "getLocation BB_2")
         # client(ip, port, "setZone BB_2 0.324N,40.432E,4.13")
         # client(ip, port, "getZone BB_2")
 
