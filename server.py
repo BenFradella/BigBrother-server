@@ -5,6 +5,7 @@ import socketserver
 
 import threading
 from time import sleep
+from select import select
 
 import pathlib
 import os
@@ -106,6 +107,8 @@ def getZone(device):
 
 class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
     def handle(self):
+        self.request.setblocking(0)
+
         data = ""
         clientIp = self.client_address[0]
 
@@ -147,12 +150,11 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
 
     def readUTF(self):
         # get number of bytes to receive
-        bytes_length = self.request.recv(2)
-        if len(bytes_length) >= 2:
+        ready = select([self.request], [], [], 10.0)
+        if ready[0]:
+            bytes_length = self.request.recv(2)
             utf_length = struct.unpack('!H', bytes_length)[0]
             return str(self.request.recv(utf_length), "utf-8")
-        else:
-            return ''
 
     def writeUTF(self, message):
         utf_length = struct.pack("!H", len(message))
@@ -194,8 +196,6 @@ if __name__ == "__main__":
     HOST, PORT = IP, 6969
 
     server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
-    server.socket.setblocking(0)
-    server.socket.settimeout(2)
     with server:
         ip, port = server.server_address
 
@@ -209,7 +209,7 @@ if __name__ == "__main__":
 
         """test server functions with client objects here"""
         # client(ip, port, "setLocation BB_2 0.324N,40.432E")
-        client(ip, port, "getLocation BB_2")
+        # client(ip, port, "getLocation BB_2")
         # client(ip, port, "setZone BB_2 0.324N,40.432E,4.13")
         # client(ip, port, "getZone BB_2")
 
