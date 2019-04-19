@@ -57,7 +57,7 @@ def getLocation(device):
         try:
             response = data['location'][-1]
         except IndexError:
-            response = "0.0N,0.0W"
+            response = "0.0N,0.0E"
 
     return response
 
@@ -97,7 +97,7 @@ def getZone(device):
         if len(data['zone']) > 0:
             response = '\n'.join(data['zone'])
         else:
-            response = "0.0N,0.0W,0.0"
+            response = "0.0N,0.0E,0.0"
 
     return response
 
