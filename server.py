@@ -15,6 +15,8 @@ import struct
 from sys import platform
 
 
+timeout = 20.0  # how long until connection is closed after not receiving any data
+
 fileDir = "./data/"
 pathlib.Path(fileDir).mkdir(parents=True, exist_ok=True)
 
@@ -150,11 +152,15 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
 
     def readUTF(self):
         # get number of bytes to receive
-        ready = select([self.request], [], [], 10.0)
+        ready = select([self.request], [], [], timeout)
         if ready[0]:
             bytes_length = self.request.recv(2)
-            utf_length = struct.unpack('!H', bytes_length)[0]
-            return str(self.request.recv(utf_length), "utf-8")
+            try:
+                utf_length = struct.unpack('!H', bytes_length)[0]
+                return str(self.request.recv(utf_length), "utf-8")
+            except struct.error:
+                self.finish()
+        return "Goodbye"
 
     def writeUTF(self, message):
         utf_length = struct.pack("!H", len(message))
