@@ -14,42 +14,29 @@ from sys import platform
 
 
 fileDir = "./data/"
+
+# load/create knownClients file
 try:
     with open(fileDir + 'knownClients.json') as clientFile:
         knownClients = json.load(clientFile)
 except FileNotFoundError:
     with open(fileDir + 'knownClients.json', 'w+') as clientFile:
-        init = {}
-        init['127.0.0.1'] = {'type': 'android'}
-        json.dump(init, clientFile, indent=4)
-    with open(fileDir + 'knownClients.json') as clientFile:
-        knownClients = json.load(clientFile)
-# note -- the files are full of garbage data right now
-# just for testing purposes
+        knownClients = {}
+        knownClients['127.0.0.1'] = {'type': 'android'}
+        json.dump(knownClients, clientFile, indent=4)
+
+# put all device files in a dict, create dict of associated mutex locks
 deviceFiles = {}
 for _, _, files in os.walk(fileDir):
     for file in files:
         if "BB_" in file:
-            deviceFiles[file] = fileDir + file
+            deviceFiles[file.split('.')[0]] = fileDir + file
 deviceMutex = {}
-for file in deviceFiles:
-    deviceMutex[file] = threading.Lock()
+for device in deviceFiles:
+    deviceMutex[device] = threading.Lock()
 
 
-def getLocation(device):
-    response = ""
-
-    try:
-        with open(deviceFiles[device], "r+") as lf:
-            for line in lf:
-                response += line
-    except KeyError:
-        response += "0.0N,0.0W"
-
-    return response
-
-
-def setZone(device, zone):
+def addDeviceIfNew(device):
     if device not in deviceFiles:
         fileName = fileDir + device + '.json'
         with open(fileName, 'w+') as df:
@@ -59,42 +46,60 @@ def setZone(device, zone):
             json.dump(init, df, indent=4)
         deviceFiles[device] = fileName
         deviceMutex[device] = threading.Lock()
-    
+
+
+def getLocation(device):
+    addDeviceIfNew(device)
+    response = ""
+
+    with open(deviceFiles[device], "r+") as df:
+        data = json.load(df)
+        try:
+            response = data['location'][-1]
+        except IndexError:
+            response = "0.0N,0.0W"
+
+    return response
+
+
+def setZone(device, zone):
+    addDeviceIfNew(device)
     deviceMutex[device].acquire()
 
     with open(deviceFiles[device], "r+") as df:
         data = json.load(df)
-        data['zone'].append(zone)
+        data['zone'] = zone.split('\n')
         df.seek(0)
         json.dump(data, df, indent=4)
-    
+
     deviceMutex[device].release()
 
 
 def setLocation(device, location):
-    try:
-        deviceMutex[device].acquire()
-    except KeyError:
-        deviceFiles[device] = fileDir + device
-        deviceMutex[device] = threading.Lock()
-        deviceMutex[device].acquire()
+    addDeviceIfNew(device)
+    deviceMutex[device].acquire()
 
-    with open(deviceFiles[device], "a+") as lf:
-        lf.write(location + '\n')
+    with open(deviceFiles[device], "r+") as df:
+        data = json.load(df)
+        data['location'].append(location)
+        df.seek(0)
+        json.dump(data, df, indent=4)
 
     deviceMutex[device].release()
 
 
 def getZone(device):
+    addDeviceIfNew(device)
     response = ""
 
     with open(deviceFiles[device], "r+") as df:
-        for line in df:
-            if device in line:
-                response += line.split(' ')[1]
-                break
-    if response == "":
-        response += "0.0N,0.0W,0.0"
+        data = json.load(df)
+        try:
+            for circle in data['zone'][:-1]:
+                response += (circle + '\n')
+            response += data['zone'][-1]
+        except IndexError:
+            response = "0.0N,0.0W,0.0"
 
     return response
 
@@ -106,12 +111,14 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
 
         while data != "Goodbye":
             data = self.readUTF()
+
             if clientIp not in knownClients:
                 knownClients[clientIp] = {}
                 if "observer" in data:
                     knownClients[clientIp]['type'] = "android"
                 else:
                     knownClients[clientIp]['type'] = "bigBrother"
+
             print("\nServer recieved: '{}' from {}".format(data, clientIp))
             response = ""
 
@@ -127,11 +134,11 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
             elif "getZone" in data:
                 device = data.split(' ')[1]
                 response = getZone(device)
-            
+
             if response != "":
                 print("Server sent: {}".format(response))
                 self.writeUTF(response)
-            
+
             sleep(0.02)  # max 50 hertz tickrate to save cpu resources
 
     def finish(self):
@@ -140,11 +147,15 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
 
     def readUTF(self):
         # get number of bytes to receive
-        utf_length = struct.unpack('>H', self.request.recv(2))[0]
-        return str(self.request.recv(utf_length), "utf-8")
+        bytes_length = self.request.recv(2)
+        if len(bytes_length) >= 2:
+            utf_length = struct.unpack('!H', bytes_length)[0]
+            return str(self.request.recv(utf_length), "utf-8")
+        else:
+            return ''
 
     def writeUTF(self, message):
-        utf_length = struct.pack(">H", len(message))
+        utf_length = struct.pack("!H", len(message))
         self.request.send(utf_length)  # send length of string
         self.request.send(message.encode("utf-8"))  # send string
 
@@ -156,14 +167,14 @@ class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 def client(ip, port, message):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         def writeUTF(msg):
-            sock.send(struct.pack(">H", len(msg)))
+            sock.send(struct.pack("!H", len(msg)))
             sock.send(msg.encode("utf-8"))
 
         sock.connect((ip, port))
         writeUTF("Hello from an observer")
         writeUTF(message)
         if "get" in message:
-            utf_length = struct.unpack('>H', sock.recv(2))[0]
+            utf_length = struct.unpack('!H', sock.recv(2))[0]
             response = str(sock.recv(utf_length), "utf-8")
             print("\nClient Received: {}".format(response))
         writeUTF("Goodbye")
@@ -194,10 +205,11 @@ if __name__ == "__main__":
         server_thread.start()
         print("Server loop running in thread:", server_thread.name)
 
-        # test server functions with client objects here
-        # client(ip, port, "getLocation BB_0")
-        # client(ip, port, "getZone BB_3")
-        client(ip, port, "setZone BB_2 0.0N,0.0W,0.0")
+        """test server functions with client objects here"""
+        # client(ip, port, "setLocation BB_2 0.324N,40.432E")
+        # client(ip, port, "getLocation BB_2")
+        # client(ip, port, "setZone BB_2 0.324N,40.432E,4.13")
+        # client(ip, port, "getZone BB_2")
 
         shutdown = input("Press Enter to shutdown server: \n")
         server.shutdown()
