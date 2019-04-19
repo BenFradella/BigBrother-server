@@ -6,6 +6,7 @@ import socketserver
 import threading
 from time import sleep
 
+import pathlib
 import os
 import json
 import struct
@@ -14,6 +15,7 @@ from sys import platform
 
 
 fileDir = "./data/"
+pathlib.Path(fileDir).mkdir(parents=True, exist_ok=True)
 
 # load/create knownClients file
 try:
@@ -30,7 +32,7 @@ deviceFiles = {}
 for _, _, files in os.walk(fileDir):
     for file in files:
         if "BB_" in file:
-            deviceFiles[file.split('.')[0]] = fileDir + file
+            deviceFiles[os.path.splitext(file)[0]] = fileDir + file
 deviceMutex = {}
 for device in deviceFiles:
     deviceMutex[device] = threading.Lock()
