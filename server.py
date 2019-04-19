@@ -94,11 +94,9 @@ def getZone(device):
 
     with open(deviceFiles[device], "r+") as df:
         data = json.load(df)
-        try:
-            for circle in data['zone'][:-1]:
-                response += (circle + '\n')
-            response += data['zone'][-1]
-        except IndexError:
+        if len(data['zone']) > 0:
+            response = '\n'.join(data['zone'])
+        else:
             response = "0.0N,0.0W,0.0"
 
     return response
