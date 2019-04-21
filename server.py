@@ -15,7 +15,7 @@ import struct
 from sys import platform
 
 
-timeout = 20.0  # how long until connection is closed after not receiving any data
+timeout = 10.0  # how long until connection is closed after not receiving any data
 
 fileDir = "./data/"
 pathlib.Path(fileDir).mkdir(parents=True, exist_ok=True)
@@ -27,8 +27,6 @@ try:
 except FileNotFoundError:
     with open(fileDir + 'knownClients.json', 'w+') as clientFile:
         knownClients = {}
-        knownClients['127.0.0.1'] = {'type': 'android'}
-        json.dump(knownClients, clientFile, indent=4)
 
 # put all device files in a dict, create dict of associated mutex locks
 deviceFiles = {}
@@ -114,37 +112,39 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         data = ""
         clientIp = self.client_address[0]
 
-        while data != "Goodbye":
+        while True:
+            sleep(0.02)  # max 50 hertz tickrate to save cpu resources
             data = self.readUTF()
 
-            if clientIp not in knownClients:
-                knownClients[clientIp] = {}
-                if "observer" in data:
-                    knownClients[clientIp]['type'] = "android"
-                else:
-                    knownClients[clientIp]['type'] = "bigBrother"
+            if (data is not None) and (data != "Goodbye"):
+                if clientIp not in knownClients:
+                    if "setZone" in data:
+                        knownClients[clientIp] = {'type': "android"}
+                        knownClients[clientIp]['lastLocationSent'] = {}
+                    elif "setLocation" in data:
+                        knownClients[clientIp] = {'type': "bigBrother"}
 
-            print("\nServer recieved: '{}' from {}".format(data, clientIp))
-            response = ""
+                print("\nServer recieved: '{}' from {}".format(data, clientIp))
+                response = ""
 
-            if "getLocation" in data:
-                device = data.split(' ')[1]
-                response = getLocation(device)
-            elif "setZone" in data:
-                device, zone = data.split(' ')[1:3]
-                setZone(device, zone)
-            elif "setLocation" in data:
-                device, location = data.split(' ')[1:3]
-                setLocation(device, location)
-            elif "getZone" in data:
-                device = data.split(' ')[1]
-                response = getZone(device)
+                if "getLocation" in data:
+                    device = data.split(' ')[1]
+                    response = getLocation(device)
+                elif "setZone" in data:
+                    device, zone = data.split(' ')[1:3]
+                    setZone(device, zone)
+                elif "setLocation" in data:
+                    device, location = data.split(' ')[1:3]
+                    setLocation(device, location)
+                elif "getZone" in data:
+                    device = data.split(' ')[1]
+                    response = getZone(device)
 
-            if response != "":
-                print("Server sent: {}".format(response))
-                self.writeUTF(response)
-
-            sleep(0.02)  # max 50 hertz tickrate to save cpu resources
+                if response != "":
+                    print("Server sent: {}".format(response))
+                    self.writeUTF(response)
+            else:
+                break
 
     def finish(self):
         print("connection with {} closed".format(self.client_address[0]))
@@ -159,8 +159,10 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 utf_length = struct.unpack('!H', bytes_length)[0]
                 return str(self.request.recv(utf_length), "utf-8")
             except struct.error:
-                self.finish()
-        return "Goodbye"
+                print("{} sent bad message header: {}".format(
+                    self.client_address[0], bytes_length))
+                return
+        print("timeout: ", end='')
 
     def writeUTF(self, message):
         utf_length = struct.pack("!H", len(message))
@@ -179,7 +181,6 @@ def client(ip, port, message):
             sock.send(msg.encode("utf-8"))
 
         sock.connect((ip, port))
-        writeUTF("Hello from an observer")
         writeUTF(message)
         if "get" in message:
             utf_length = struct.unpack('!H', sock.recv(2))[0]
@@ -200,6 +201,7 @@ if __name__ == "__main__":
 
     # Port 0 means to select an arbitrary unused port
     HOST, PORT = IP, 6969
+    knownClients[IP] = {'type': "self"}
 
     server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
     with server:
