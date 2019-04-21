@@ -196,12 +196,14 @@ if __name__ == "__main__":
         # connections from outside their local network or not but the local
         # client objects will still work for testing commands
         IP = socket.gethostbyname(socket.gethostname())
+        knownClients[IP] = {'type': "self"}
     else:
         IP = ''
+        knownClients['127.0.0.1'] = {'type': "self"}
+
 
     # Port 0 means to select an arbitrary unused port
     HOST, PORT = IP, 6969
-    knownClients[IP] = {'type': "self"}
 
     server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
     with server:
