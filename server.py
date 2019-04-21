@@ -12,9 +12,11 @@ import os
 import json
 import struct
 
+from colorama import Fore, Style, init, deinit
 from sys import platform
 
 
+init()  # initialize stdin and stderr for colors
 timeout = 10.0  # how long until connection is closed after not receiving any data
 
 fileDir = "./data/"
@@ -124,7 +126,7 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                     elif "setLocation" in data:
                         knownClients[clientIp] = {'type': "bigBrother"}
 
-                print("\nServer recieved: '{}' from {}".format(data, clientIp))
+                self.clientPrint("{} sent: '{}'".format(clientIp, data))
                 response = ""
 
                 if "getLocation" in data:
@@ -141,13 +143,13 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                     response = getZone(device)
 
                 if response != "":
-                    print("Server sent: {}".format(response))
+                    self.serverPrint("Server sent: {}".format(response))
                     self.writeUTF(response)
             else:
                 break
 
     def finish(self):
-        print("connection with {} closed".format(self.client_address[0]))
+        self.serverPrint("connection with {} closed".format(self.client_address[0]))
         self.request.close()
 
     def readUTF(self):
@@ -159,15 +161,39 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 utf_length = struct.unpack('!H', bytes_length)[0]
                 return str(self.request.recv(utf_length), "utf-8")
             except struct.error:
-                print("{} sent bad message header: {}".format(
+                self.clientPrint("{} sent bad message header: {}".format(
                     self.client_address[0], bytes_length))
                 return
-        print("timeout: ", end='')
+        self.serverPrint("timeout: ", end='')
 
     def writeUTF(self, message):
         utf_length = struct.pack("!H", len(message))
         self.request.send(utf_length)  # send length of string
         self.request.send(message.encode("utf-8"))  # send string
+
+    def serverPrint(self, string, end='\n'):
+        lines = [string[i:i+40] for i in range(0, len(string), 40)]
+        for line in lines[:-1]:
+            print((Fore.RED + line + Style.RESET_ALL).ljust(40))
+        print((Fore.RED + lines[-1] + Style.RESET_ALL).ljust(40), end=end)
+
+    def clientPrint(self, string, end='\n'):
+        clientType = knownClients[self.client_address[0]]['type']
+        if clientType == 'self':
+            color = Fore.YELLOW
+        elif clientType == 'bigBrother':
+            color = Fore.LIGHTBLUE_EX
+        elif clientType == 'android':
+            color = Fore.GREEN
+        else:
+            color = Fore.MAGENTA
+
+        lines = [string[i:i+40] for i in range(0, len(string), 40)]
+        for line in lines[:-1]:
+            print(''.ljust(40), end='')
+            print((color + line + Style.RESET_ALL).ljust(40))
+        print(''.ljust(40), end='')
+        print((color + lines[-1] + Style.RESET_ALL).ljust(40), end=end)
 
 
 class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
@@ -180,12 +206,18 @@ def client(ip, port, message):
             sock.send(struct.pack("!H", len(msg)))
             sock.send(msg.encode("utf-8"))
 
+        def clientPrint(string, end='\n'):
+            lines = [string[i:i+40] for i in range(0, len(string), 40)]
+            for line in lines:
+                print(''.ljust(40), end='')
+                print((Fore.YELLOW + line + Style.RESET_ALL).ljust(40), end=end)
+
         sock.connect((ip, port))
         writeUTF(message)
         if "get" in message:
             utf_length = struct.unpack('!H', sock.recv(2))[0]
             response = str(sock.recv(utf_length), "utf-8")
-            print("\nClient Received: {}".format(response))
+            clientPrint("Client Received: {}".format(response))
         writeUTF("Goodbye")
 
 
@@ -216,15 +248,18 @@ if __name__ == "__main__":
         server_thread.daemon = True
         server_thread.start()
         print("Server loop running in thread:", server_thread.name)
+        print("Press Enter to shutdown server: \n")
 
         """test server functions with client objects here"""
-        # client(ip, port, "setLocation BB_2 0.324N,40.432E")
-        # client(ip, port, "getLocation BB_2")
-        # client(ip, port, "setZone BB_2 0.324N,40.432E,4.13")
-        # client(ip, port, "getZone BB_2")
+        # client(ip, port, "setLocation BB_2 0.324N,40.432E"); sleep(0.05)
+        # client(ip, port, "getLocation BB_2"); sleep(0.05)
+        # client(ip, port, "setZone BB_2 0.324N,40.432E,4.13"); sleep(0.05)
+        # client(ip, port, "getZone BB_2"); sleep(0.05)
 
-        shutdown = input("Press Enter to shutdown server: \n")
+        shutdown = input()
         server.shutdown()
 
     with open(fileDir + 'knownClients.json', 'w') as clientFile:
         json.dump(knownClients, clientFile, indent=4)
+
+deinit()  # return stdin and stderr colors back to normal
