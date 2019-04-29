@@ -17,18 +17,20 @@ from sys import platform
 
 
 init()  # initialize stdin and stderr for colors
+
 timeout = 10.0  # how long until connection is closed after not receiving any data
+tickrate = 50.00
 
 fileDir = "./data/"
 pathlib.Path(fileDir).mkdir(parents=True, exist_ok=True)
 
-# load/create knownClients file
+
+# load/create knownClients
 try:
     with open(fileDir + 'knownClients.json') as clientFile:
         knownClients = json.load(clientFile)
 except FileNotFoundError:
-    with open(fileDir + 'knownClients.json', 'w+') as clientFile:
-        knownClients = {}
+    knownClients = {}
 
 # put all device files in a dict, create dict of associated mutex locks
 deviceFiles = {}
@@ -149,7 +151,8 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 break
 
     def finish(self):
-        self.serverPrint("connection with {} closed".format(self.client_address[0]))
+        self.serverPrint("connection with {} closed".format(
+            self.client_address[0]))
         self.request.close()
 
     def readUTF(self):
@@ -164,6 +167,10 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 self.clientPrint("{} sent bad message header: {}".format(
                     self.client_address[0], bytes_length))
                 return
+            except UnicodeDecodeError as err:
+                self.clientPrint("{} sent undecodable byte: {}".format(
+                    self.client_address[0], err.object))
+                return
         self.serverPrint("timeout: ", end='')
 
     def writeUTF(self, message):
@@ -174,30 +181,57 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
     def serverPrint(self, string, end='\n'):
         lines = [string[i:i+40] for i in range(0, len(string), 40)]
         for line in lines[:-1]:
-            print((Fore.RED + line + Style.RESET_ALL).ljust(40))
-        print((Fore.RED + lines[-1] + Style.RESET_ALL).ljust(40), end=end)
+            print(Fore.RED + line + Style.RESET_ALL)
+        print((Fore.RED + lines[-1] + Style.RESET_ALL), end=end)
 
     def clientPrint(self, string, end='\n'):
-        clientType = knownClients[self.client_address[0]]['type']
-        if clientType == 'self':
-            color = Fore.YELLOW
-        elif clientType == 'bigBrother':
-            color = Fore.LIGHTBLUE_EX
-        elif clientType == 'android':
-            color = Fore.GREEN
-        else:
+        try:
+            clientType = knownClients[self.client_address[0]]['type']
+            if clientType == 'self':
+                color = Fore.YELLOW
+            elif clientType == 'bigBrother':
+                color = Fore.LIGHTBLUE_EX
+            elif clientType == 'android':
+                color = Fore.GREEN
+        except:
             color = Fore.MAGENTA
 
         lines = [string[i:i+40] for i in range(0, len(string), 40)]
         for line in lines[:-1]:
             print(''.ljust(40), end='')
-            print((color + line + Style.RESET_ALL).ljust(40))
+            print(color + line + Style.RESET_ALL)
         print(''.ljust(40), end='')
-        print((color + lines[-1] + Style.RESET_ALL).ljust(40), end=end)
+        print((color + lines[-1] + Style.RESET_ALL), end=end)
 
 
 class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     pass
+
+    # def __init__(self, address, requestHandler):
+    #     self.timeout = 10.0  # how long until connection is closed after not receiving any data
+    #     self.tickrate = 50.00
+
+    #     self.fileDir = "./data/"
+    #     pathlib.Path(fileDir).mkdir(parents=True, exist_ok=True)
+
+    #     # load/create knownClients
+    #     try:
+    #         with open(fileDir + 'knownClients.json') as clientFile:
+    #             self.knownClients = json.load(clientFile)
+    #     except FileNotFoundError:
+    #         self.knownClients = {}
+
+    #     # put all device files in a dict, create dict of associated mutex locks
+    #     self.deviceFiles = {}
+    #     for _, _, files in os.walk(fileDir):
+    #         for file in files:
+    #             if "BB_" in file:
+    #                 self.deviceFiles[os.path.splitext(file)[0]] = self.fileDir + file
+    #     self.deviceMutex = {}
+    #     for device in deviceFiles:
+    #         self.deviceMutex[device] = threading.Lock()
+
+    #     super().__init__(address, requestHandler)
 
 
 def client(ip, port, message):
@@ -256,10 +290,13 @@ if __name__ == "__main__":
         # client(ip, port, "setZone BB_2 0.324N,40.432E,4.13"); sleep(0.05)
         # client(ip, port, "getZone BB_2"); sleep(0.05)
 
-        shutdown = input()
-        server.shutdown()
+        try:
+            shutdown = input()
+            server.shutdown()
+        except KeyboardInterrupt:
+            print("Keyboard Interrupt, saving files...")
 
-    with open(fileDir + 'knownClients.json', 'w') as clientFile:
+    with open(fileDir + 'knownClients.json', 'w+') as clientFile:
         json.dump(knownClients, clientFile, indent=4)
 
 deinit()  # return stdin and stderr colors back to normal
