@@ -6,6 +6,7 @@ import socketserver
 import threading
 from time import sleep
 from select import select
+import re
 
 import pathlib
 import os
@@ -116,6 +117,13 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         data = ""
         clientIp = self.client_address[0]
 
+        reDict = {
+            'getLocation': r"^getLocation (?P<device>BB_\d+)$",
+            'setLocation': r"^setLocation (?P<device>BB_\d+) (?P<location>\d+(.\d+)?[NS],\d+(.\d+)?[EW])$",
+            'getZone': r"^getZone (?P<device>BB_\d+)$",
+            'setZone': r"^setZone (?P<device>BB_\d+) (?P<zone>((\d+(.\d+)?[NS],\d+(.\d+)?[EW]),\d+(.\d+)?(\n)?)+)$"
+        }
+
         while True:
             sleep(0.02)  # max 50 hertz tickrate to save cpu resources
             data = self.readUTF()
@@ -131,18 +139,22 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 self.clientPrint("{} sent: '{}'".format(clientIp, data))
                 response = ""
 
-                if "getLocation" in data:
-                    device = data.split(' ')[1]
-                    response = getLocation(device)
-                elif "setZone" in data:
-                    device, zone = data.split(' ')[1:3]
-                    setZone(device, zone)
-                elif "setLocation" in data:
-                    device, location = data.split(' ')[1:3]
-                    setLocation(device, location)
-                elif "getZone" in data:
-                    device = data.split(' ')[1]
-                    response = getZone(device)
+                for regex in reDict:
+                    query = re.match(reDict[regex], data)
+                    if query is not None:
+                        if regex == 'getLocation':
+                            device = query.group('device')
+                            response = getLocation(device)
+                        elif regex == 'setLocation':
+                            device, location = query.groupdict().values()
+                            setLocation(device, location)
+                        elif regex == 'getZone':
+                            device = query.group('device')
+                            response = getZone(device)
+                        elif regex == 'setZone':
+                            device, zone = query.groupdict().values()
+                            setZone(device, zone)
+                        break
 
                 if response != "":
                     self.serverPrint("Server sent: {}".format(response))
