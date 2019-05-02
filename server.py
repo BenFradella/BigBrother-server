@@ -60,7 +60,7 @@ def getLocation(device):
     addDeviceIfNew(device)
     response = ""
 
-    with open(deviceFiles[device], "r+") as df:
+    with open(deviceFiles[device], "r") as df:
         data = json.load(df)
         try:
             response = data['location'][-1]
@@ -78,6 +78,7 @@ def setZone(device, zone):
         data = json.load(df)
         data['zone'] = zone.split('\n')
         df.seek(0)
+        df.truncate(0)
         json.dump(data, df, indent=4)
 
     deviceMutex[device].release()
@@ -89,8 +90,9 @@ def setLocation(device, location):
 
     with open(deviceFiles[device], "r+") as df:
         data = json.load(df)
-        data['location'].append(location)
+        data['location'].append(location.strip('-'))
         df.seek(0)
+        df.truncate(0)
         json.dump(data, df, indent=4)
 
     deviceMutex[device].release()
@@ -100,7 +102,7 @@ def getZone(device):
     addDeviceIfNew(device)
     response = ""
 
-    with open(deviceFiles[device], "r+") as df:
+    with open(deviceFiles[device], "r") as df:
         data = json.load(df)
         if len(data['zone']) > 0:
             response = '\n'.join(data['zone'])
@@ -128,7 +130,9 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
             sleep(0.02)  # max 50 hertz tickrate to save cpu resources
             data = self.readUTF()
 
-            if (data is not None) and (data != "Goodbye"):
+            if data == "heartbeat":
+                continue
+            elif (data is not None) and (data != "Goodbye"):
                 if clientIp not in knownClients:
                     if "setZone" in data:
                         knownClients[clientIp] = {'type': "android"}
@@ -191,7 +195,7 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         self.request.send(message.encode("utf-8"))  # send string
 
     def serverPrint(self, string, end='\n'):
-        lines = [string[i:i+40] for i in range(0, len(string), 40)]
+        lines = [string[i:i+40].replace('\n', "; ") for i in range(0, len(string), 40)]
         for line in lines[:-1]:
             print(Fore.RED + line + Style.RESET_ALL)
         print((Fore.RED + lines[-1] + Style.RESET_ALL), end=end)
@@ -208,7 +212,7 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         except:
             color = Fore.MAGENTA
 
-        lines = [string[i:i+40] for i in range(0, len(string), 40)]
+        lines = [string[i:i+40].replace('\n', "; ") for i in range(0, len(string), 40)]
         for line in lines[:-1]:
             print(''.ljust(40), end='')
             print(color + line + Style.RESET_ALL)
