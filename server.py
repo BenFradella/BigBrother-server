@@ -30,6 +30,9 @@ pathlib.Path(fileDir).mkdir(parents=True, exist_ok=True)
 try:
     with open(fileDir + 'knownClients.json') as clientFile:
         knownClients = json.load(clientFile)
+    for device in knownClients:
+        if knownClients[device]['type'] == 'android':
+            knownClients[device]['newLocationIndex'] = {}
 except FileNotFoundError:
     knownClients = {}
 
@@ -47,25 +50,28 @@ for device in deviceFiles:
 def addDeviceIfNew(device):
     if device not in deviceFiles:
         fileName = fileDir + device + '.json'
+        init = {}
+        init['location'] = []
+        init['zone'] = []
         with open(fileName, 'w+') as df:
-            init = {}
-            init['location'] = []
-            init['zone'] = []
             json.dump(init, df, indent=4)
         deviceFiles[device] = fileName
         deviceMutex[device] = threading.Lock()
 
 
-def getLocation(device):
+def getLocation(device, client):
     addDeviceIfNew(device)
     response = ""
 
+    try:
+        newData = knownClients[client]['newLocationIndex'][device]
+    except KeyError:
+        newData = knownClients[client]['newLocationIndex'][device] = 0
+
     with open(deviceFiles[device], "r") as df:
         data = json.load(df)
-        try:
-            response = data['location'][-1]
-        except IndexError:
-            response = "0.0N,0.0E"
+    response = '\n'.join(data['location'][newData:])
+    knownClients[client]['newLocationIndex'][device] = len(data['location'])
 
     return response
 
@@ -104,10 +110,10 @@ def getZone(device):
 
     with open(deviceFiles[device], "r") as df:
         data = json.load(df)
-        if len(data['zone']) > 0:
-            response = '\n'.join(data['zone'])
-        else:
-            response = "0.0N,0.0E,0.0"
+    if len(data['zone']) > 0:
+        response = '\n'.join(data['zone'])
+    else:
+        response = "0.0N,0.0E,0.0"
 
     return response
 
@@ -136,19 +142,19 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 if clientIp not in knownClients:
                     if "setZone" in data:
                         knownClients[clientIp] = {'type': "android"}
-                        knownClients[clientIp]['lastLocationSent'] = {}
+                        knownClients[clientIp]['newLocationIndex'] = {}
                     elif "setLocation" in data:
                         knownClients[clientIp] = {'type': "bigBrother"}
 
                 self.clientPrint("{} sent: '{}'".format(clientIp, data))
-                response = ""
+                response = None
 
                 for regex in reDict:
                     query = re.match(reDict[regex], data)
                     if query is not None:
                         if regex == 'getLocation':
                             device = query.group('device')
-                            response = getLocation(device)
+                            response = getLocation(device, clientIp)
                         elif regex == 'setLocation':
                             device, location = query.groupdict().values()
                             setLocation(device, location)
@@ -160,8 +166,8 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                             setZone(device, zone)
                         break
 
-                if response != "":
-                    self.serverPrint("Server sent: {}".format(response))
+                if response is not None:
+                    if len(response) > 0 : self.serverPrint("Server sent: {}".format(response))
                     self.writeUTF(response)
             else:
                 break
@@ -169,6 +175,8 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
     def finish(self):
         self.serverPrint("connection with {} closed".format(
             self.client_address[0]))
+        if knownClients[self.client_address[0]]['type'] == 'android':
+            knownClients[self.client_address[0]]['newLocationIndex'] = {}
         self.request.close()
 
     def readUTF(self):
