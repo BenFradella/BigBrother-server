@@ -12,19 +12,20 @@ import pathlib
 import os
 import json
 import struct
+from math import floor
 
 from colorama import Fore, Style, init, deinit
 from sys import platform
 
 
 init()  # initialize stdin and stderr for colors
+def columns(): return floor(int(os.popen('stty size', 'r').read().split()[1])/2)
 
 timeout = 10.0  # how long until connection is closed after not receiving any data
 tickrate = 50.00
 
 fileDir = "./data/"
 pathlib.Path(fileDir).mkdir(parents=True, exist_ok=True)
-
 
 # load/create knownClients
 try:
@@ -140,10 +141,10 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 continue
             elif (data is not None) and (data != "Goodbye"):
                 if clientIp not in knownClients:
-                    if "setZone" in data:
+                    if "setZone" in data or "getLocation" in data:
                         knownClients[clientIp] = {'type': "android"}
                         knownClients[clientIp]['newLocationIndex'] = {}
-                    elif "setLocation" in data:
+                    elif "setLocation" in data or "getZone" in data:
                         knownClients[clientIp] = {'type': "bigBrother"}
 
                 self.clientPrint("{} sent: '{}'".format(clientIp, data))
@@ -175,8 +176,9 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
     def finish(self):
         self.serverPrint("connection with {} closed".format(
             self.client_address[0]))
-        if knownClients[self.client_address[0]]['type'] == 'android':
-            knownClients[self.client_address[0]]['newLocationIndex'] = {}
+        if self.client_address[0] in knownClients:
+            if knownClients[self.client_address[0]]['type'] == 'android':
+                knownClients[self.client_address[0]]['newLocationIndex'] = {}
         self.request.close()
 
     def readUTF(self):
@@ -203,7 +205,7 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         self.request.send(message.encode("utf-8"))  # send string
 
     def serverPrint(self, string, end='\n'):
-        lines = [string[i:i+40].replace('\n', "; ") for i in range(0, len(string), 40)]
+        lines = [string[i:i+columns()].replace('\n', "; ") for i in range(0, len(string), columns())]
         for line in lines[:-1]:
             print(Fore.RED + line + Style.RESET_ALL)
         print((Fore.RED + lines[-1] + Style.RESET_ALL), end=end)
@@ -220,11 +222,11 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         except:
             color = Fore.MAGENTA
 
-        lines = [string[i:i+40].replace('\n', "; ") for i in range(0, len(string), 40)]
+        lines = [string[i:i+columns()].replace('\n', "; ") for i in range(0, len(string), columns())]
         for line in lines[:-1]:
-            print(''.ljust(40), end='')
+            print(''.ljust(columns()), end='')
             print(color + line + Style.RESET_ALL)
-        print(''.ljust(40), end='')
+        print(''.ljust(columns()), end='')
         print((color + lines[-1] + Style.RESET_ALL), end=end)
 
 
@@ -265,10 +267,10 @@ def client(ip, port, message):
             sock.send(msg.encode("utf-8"))
 
         def clientPrint(string, end='\n'):
-            lines = [string[i:i+40] for i in range(0, len(string), 40)]
+            lines = [string[i:i+columns()] for i in range(0, len(string), columns())]
             for line in lines:
-                print(''.ljust(40), end='')
-                print((Fore.YELLOW + line + Style.RESET_ALL).ljust(40), end=end)
+                print(''.ljust(columns()), end='')
+                print((Fore.YELLOW + line + Style.RESET_ALL).ljust(columns()), end=end)
 
         sock.connect((ip, port))
         writeUTF(message)
@@ -312,7 +314,7 @@ if __name__ == "__main__":
         # client(ip, port, "setLocation BB_2 0.324N,40.432E"); sleep(0.05)
         # client(ip, port, "getLocation BB_2"); sleep(0.05)
         # client(ip, port, "setZone BB_2 0.324N,40.432E,4.13"); sleep(0.05)
-        # client(ip, port, "getZone BB_2"); sleep(0.05)
+        # client(ip, port, "getZone BB_0"); sleep(0.05)
 
         try:
             shutdown = input()
