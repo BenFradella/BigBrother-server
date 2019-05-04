@@ -97,7 +97,7 @@ def setLocation(device, location):
 
     with open(deviceFiles[device], "r+") as df:
         data = json.load(df)
-        data['location'].append(location.strip('-'))
+        data['location'].append(location)
         df.seek(0)
         df.truncate(0)
         json.dump(data, df, indent=4)
@@ -188,7 +188,7 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
             bytes_length = self.request.recv(2)
             try:
                 utf_length = struct.unpack('!H', bytes_length)[0]
-                return str(self.request.recv(utf_length), "utf-8")
+                return str(self.request.recv(utf_length), "utf-8").strip('-\0')
             except struct.error:
                 self.clientPrint("{} sent bad message header: {}".format(
                     self.client_address[0], bytes_length))
